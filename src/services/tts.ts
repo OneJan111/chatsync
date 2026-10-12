@@ -1,10 +1,13 @@
 // High-Performance Browser Text-To-Speech Engine with Prioritized Queue
+import { cleanChatText } from './textCleanup';
+
 export interface SpeechItem {
   id: string;
   text: string;
   speaker?: string;
   isPriority?: boolean; // Super Chats jump to front of queue
   lang?: string;
+  category?: 'chat' | 'gift';
 }
 
 class TtsEngine {
@@ -14,9 +17,10 @@ class TtsEngine {
   private volume: number = 0.8;
   private rate: number = 1.0;
   private skipUsernames: boolean = true;
-  private skipEmojis: boolean = true;
   private selectedVoiceUri: string = '';
   private voices: SpeechSynthesisVoice[] = [];
+  private activeUtterance: SpeechSynthesisUtterance | null = null;
+  private activeItem: SpeechItem | null = null;
 
   constructor() {
     if (typeof window !== 'undefined' && 'speechSynthesis' in window) {
@@ -41,10 +45,23 @@ class TtsEngine {
   }
 
   public setEnabled(val: boolean) {
+    if (val && !this.isSupported()) {
+      console.error('Text-to-speech is unavailable in this browser.');
+      return false;
+    }
     this.isEnabled = val;
-    if (!val) {
+    if (val && typeof window !== 'undefined') {
+      window.speechSynthesis.resume();
+    } else {
       this.stop();
     }
+    return true;
+  }
+
+  public isSupported(): boolean {
+    return typeof window !== 'undefined'
+      && 'speechSynthesis' in window
+      && typeof SpeechSynthesisUtterance !== 'undefined';
   }
 
   public getIsEnabled(): boolean {
@@ -63,22 +80,14 @@ class TtsEngine {
     this.skipUsernames = val;
   }
 
-  public setSkipEmojis(val: boolean) {
-    this.skipEmojis = val;
-  }
-
   public setVoice(uri: string) {
     this.selectedVoiceUri = uri;
   }
 
   public enqueue(item: SpeechItem) {
-    if (!this.isEnabled || typeof window === 'undefined' || !('speechSynthesis' in window)) return;
+    if (!this.isEnabled || !this.isSupported()) return;
 
-    let cleanText = item.text;
-    if (this.skipEmojis) {
-      // Strip common emojis and symbols
-      cleanText = cleanText.replace(/[\u{1F600}-\u{1F64F}\u{1F300}-\u{1F5FF}\u{1F680}-\u{1F6FF}\u{1F1E0}-\u{1F1FF}]/gu, '');
-    }
+    const cleanText = cleanChatText(item.text);
 
     if (!cleanText.trim()) return;
 
@@ -91,11 +100,17 @@ class TtsEngine {
 
     if (item.isPriority) {
       // Insert at the front (after currently speaking item)
+      if (this.queue.filter((queued) => queued.isPriority).length >= 50) {
+        const oldestPriority = this.queue.findIndex((queued) => queued.isPriority);
+        if (oldestPriority !== -1) this.queue.splice(oldestPriority, 1);
+      }
       this.queue.unshift(cleanedItem);
     } else {
       // Normal chat: limit queue length so it doesn't build an infinite backlog
-      if (this.queue.length > 8) {
-        this.queue.shift(); // Drop oldest
+      const normalCount = this.queue.filter((queued) => !queued.isPriority).length;
+      if (normalCount >= 20) {
+        const oldestNormal = this.queue.findIndex((queued) => !queued.isPriority);
+        if (oldestNormal !== -1) this.queue.splice(oldestNormal, 1);
       }
       this.queue.push(cleanedItem);
     }
@@ -105,24 +120,39 @@ class TtsEngine {
     }
   }
 
+  public removeCategory(category: NonNullable<SpeechItem['category']>) {
+    this.queue = this.queue.filter((item) => item.category !== category);
+    if (this.activeItem?.category !== category || !this.isSupported()) return;
+
+    this.activeUtterance = null;
+    this.activeItem = null;
+    this.isSpeaking = false;
+    window.speechSynthesis.cancel();
+    this.processNext();
+  }
+
   public skip() {
-    if (typeof window !== 'undefined' && 'speechSynthesis' in window) {
+    if (this.isSupported()) {
       window.speechSynthesis.cancel();
       this.isSpeaking = false;
+      this.activeUtterance = null;
+      this.activeItem = null;
       this.processNext();
     }
   }
 
   public stop() {
     this.queue = [];
-    if (typeof window !== 'undefined' && 'speechSynthesis' in window) {
+    if (this.isSupported()) {
       window.speechSynthesis.cancel();
       this.isSpeaking = false;
+      this.activeUtterance = null;
+      this.activeItem = null;
     }
   }
 
   private processNext() {
-    if (this.queue.length === 0) {
+    if (!this.isEnabled || !this.isSupported() || this.queue.length === 0) {
       this.isSpeaking = false;
       return;
     }
@@ -130,32 +160,51 @@ class TtsEngine {
     const nextItem = this.queue.shift();
     if (!nextItem) return;
 
-    this.isSpeaking = true;
-    const utterance = new SpeechSynthesisUtterance(nextItem.text);
-    utterance.volume = this.volume;
-    utterance.rate = this.rate;
-
-    // Detect language or assign selected voice
-    if (this.selectedVoiceUri) {
-      const match = this.voices.find((v) => v.voiceURI === this.selectedVoiceUri);
-      if (match) utterance.voice = match;
-    }
-
-    utterance.onend = () => {
-      this.isSpeaking = false;
-      this.processNext();
-    };
-
-    utterance.onerror = () => {
-      this.isSpeaking = false;
-      this.processNext();
-    };
-
     try {
+      this.isSpeaking = true;
+      this.activeItem = nextItem;
+      const utterance = new SpeechSynthesisUtterance(nextItem.text);
+      this.activeUtterance = utterance;
+      utterance.volume = this.volume;
+      utterance.rate = this.rate;
+      utterance.lang = nextItem.lang || this.detectLanguage(nextItem.text);
+
+      const selectedVoice = this.voices.find((voice) => voice.voiceURI === this.selectedVoiceUri);
+      const languageVoice = this.voices.find((voice) =>
+        voice.lang.toLowerCase().startsWith(utterance.lang.toLowerCase().split('-')[0]),
+      );
+      if (selectedVoice || languageVoice) utterance.voice = selectedVoice || languageVoice || null;
+
+      const finish = () => {
+        if (this.activeUtterance !== utterance) return;
+        this.activeUtterance = null;
+        this.activeItem = null;
+        this.isSpeaking = false;
+        this.processNext();
+      };
+      utterance.onend = finish;
+      utterance.onerror = (event) => {
+        if (event.error !== 'canceled' && event.error !== 'interrupted') {
+          console.error(`Text-to-speech playback failed: ${event.error}`);
+        }
+        finish();
+      };
+      window.speechSynthesis.resume();
       window.speechSynthesis.speak(utterance);
-    } catch {
+    } catch (error) {
+      console.error('Failed to start text-to-speech playback:', error);
+      this.activeUtterance = null;
+      this.activeItem = null;
       this.isSpeaking = false;
+      this.processNext();
     }
+  }
+
+  private detectLanguage(text: string): string {
+    if (/[\u3040-\u30ff]/u.test(text)) return 'ja-JP';
+    if (/[\uac00-\ud7a3\u1100-\u11ff\u3130-\u318f]/u.test(text)) return 'ko-KR';
+    if (/[\u4e00-\u9fff]/u.test(text)) return 'zh-CN';
+    return 'en-US';
   }
 }
 

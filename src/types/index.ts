@@ -24,7 +24,20 @@ export interface ChatMessage {
   isQuestion?: boolean;
   sentiment?: 'positive' | 'hype' | 'funny' | 'question' | 'neutral' | 'toxic';
   emotes?: { code: string; url: string }[];
+  stickerUrl?: string;
   isBlocked?: boolean;
+}
+
+export interface SiteEmote {
+  code: string;
+  label: string;
+  url: string;
+  platform: 'bilibili' | 'youtube';
+  isLocked?: boolean;
+  category?: 'charge' | 'room' | 'general' | 'garb' | 'member';
+  packName?: string;
+  isRoomOwner?: boolean;
+  unlockHint?: string;
 }
 
 export interface SuperChatGift {
@@ -37,12 +50,15 @@ export interface SuperChatGift {
   giftName?: string;
   giftIcon?: string;
   message?: string;
+  emotes?: { code: string; url: string }[];
+  stickerUrl?: string;
   translatedMessage?: string;
   timestamp: string;
   isThanked: boolean;
   tierColor: string; // e.g. blue, cyan, green, yellow, orange, red
   pinyin?: string;
   furigana?: string;
+  userId?: string;
 }
 
 export interface StreamChannelConfig {

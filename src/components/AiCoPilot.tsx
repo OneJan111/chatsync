@@ -15,6 +15,7 @@ import {
   AlertCircle
 } from 'lucide-react';
 import { ChatMessage, StreamHotspot } from '../types';
+import { useTranslate } from './LanguageContext';
 
 interface AiCoPilotProps {
   messages: ChatMessage[];
@@ -22,6 +23,7 @@ interface AiCoPilotProps {
 }
 
 export const AiCoPilot: React.FC<AiCoPilotProps> = ({ messages, hotspots }) => {
+  const t = useTranslate();
   const [slangInput, setSlangInput] = useState('草，主播这个反向大招蚌埠住了 23333');
   const [targetLang, setTargetLang] = useState('en');
   const [isTranslating, setIsTranslating] = useState(false);
@@ -41,17 +43,8 @@ export const AiCoPilot: React.FC<AiCoPilotProps> = ({ messages, hotspots }) => {
     vibeScore: number;
     dominantMood: string;
     isAiGenerated: boolean;
-  }>({
-    summary: 'Chat is actively laughing at recent gameplay bloopers and celebrating the new Fleet Admiral.',
-    hotTopics: ['Tier 1 Guard Sub', 'Boss fight clutch', 'Bengbu meme'],
-    streamerActionItems: [
-      'Thank "星空下的提督" for the question about stream schedule',
-      'Mention discord link for upcoming community custom match',
-    ],
-    vibeScore: 92,
-    dominantMood: 'hype',
-    isAiGenerated: false,
-  });
+  } | null>(null);
+  const [requestError, setRequestError] = useState<string | null>(null);
 
   const [answeredQuestions, setAnsweredQuestions] = useState<Record<string, boolean>>({});
 
@@ -69,16 +62,40 @@ export const AiCoPilot: React.FC<AiCoPilotProps> = ({ messages, hotspots }) => {
   const handleTranslateSlang = async () => {
     if (!slangInput.trim()) return;
     setIsTranslating(true);
+    setRequestError(null);
     try {
-      const res = await fetch('/api/ai/translate-slang', {
+      const res = await fetch('/api/translate', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ text: slangInput, targetLang }),
       });
-      const data = await res.json();
-      setTranslationResult(data);
-    } catch (err) {
-      console.error('Translation error:', err);
+      const data = await res.json() as {
+        original?: string;
+        translation?: string;
+        nuance?: string | null;
+        sentiment?: string;
+        isAiGenerated?: boolean;
+        error?: string;
+      };
+      if (
+        !res.ok ||
+        typeof data.original !== 'string' ||
+        typeof data.translation !== 'string' ||
+        typeof data.sentiment !== 'string' ||
+        typeof data.isAiGenerated !== 'boolean'
+      ) {
+        throw new Error(data.error || 'Translation failed');
+      }
+      setTranslationResult({
+        original: data.original,
+        translation: data.translation,
+        nuance: data.nuance ?? null,
+        sentiment: data.sentiment,
+        isAiGenerated: data.isAiGenerated,
+      });
+    } catch (error: unknown) {
+      console.error('Translation error:', error);
+      setRequestError(error instanceof Error ? error.message : 'Translation failed');
     } finally {
       setIsTranslating(false);
     }
@@ -86,16 +103,44 @@ export const AiCoPilot: React.FC<AiCoPilotProps> = ({ messages, hotspots }) => {
 
   const handleRefreshVibeAnalysis = async () => {
     setIsAnalyzingVibe(true);
+    setRequestError(null);
     try {
       const res = await fetch('/api/ai/analyze-stream', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ messages }),
       });
-      const data = await res.json();
-      setStreamVibe(data);
-    } catch (err) {
-      console.error('Analysis error:', err);
+      const data = await res.json() as {
+        summary?: string;
+        hotTopics?: string[];
+        streamerActionItems?: string[];
+        vibeScore?: number;
+        dominantMood?: string;
+        isAiGenerated?: boolean;
+        error?: string;
+      };
+      if (
+        !res.ok ||
+        typeof data.summary !== 'string' ||
+        !Array.isArray(data.hotTopics) ||
+        !Array.isArray(data.streamerActionItems) ||
+        typeof data.vibeScore !== 'number' ||
+        typeof data.dominantMood !== 'string' ||
+        typeof data.isAiGenerated !== 'boolean'
+      ) {
+        throw new Error(data.error || 'Stream analysis failed');
+      }
+      setStreamVibe({
+        summary: data.summary,
+        hotTopics: data.hotTopics,
+        streamerActionItems: data.streamerActionItems,
+        vibeScore: data.vibeScore,
+        dominantMood: data.dominantMood,
+        isAiGenerated: data.isAiGenerated,
+      });
+    } catch (error: unknown) {
+      console.error('Analysis error:', error);
+      setRequestError(error instanceof Error ? error.message : 'Stream analysis failed');
     } finally {
       setIsAnalyzingVibe(false);
     }
@@ -146,14 +191,14 @@ export const AiCoPilot: React.FC<AiCoPilotProps> = ({ messages, hotspots }) => {
               <Bot className="w-4 h-4" />
             </span>
             <h2 className="text-base font-bold text-white">
-              AI Stream Co-Pilot & Danmaku Slang Intelligence
+              {t('AI Stream Co-Pilot & Danmaku Slang Intelligence')}
             </h2>
             <span className="px-2 py-0.5 rounded text-[10px] font-mono bg-pink-500/20 text-pink-300 border border-pink-500/30 flex items-center gap-1">
-              <Sparkles className="w-3 h-3" /> Gemini 3.8 Flash
+              <Sparkles className="w-3 h-3" /> Google Translate · Gemini fallback
             </span>
           </div>
           <p className="text-xs text-slate-400 mt-1 max-w-2xl">
-            Streamers often lose viewer questions in rapid danmaku torrents, and generic translation tools mangle gaming & VTuber memes. AI Co-Pilot provides context-aware translation, automatic question triage, and highlight clip marker generation.
+            {t('Translations use free Google Translate first. Gemini is used only as a translation fallback and for AI analysis, when a server API key is configured.')}
           </p>
         </div>
 
@@ -163,9 +208,15 @@ export const AiCoPilot: React.FC<AiCoPilotProps> = ({ messages, hotspots }) => {
           className="flex items-center gap-1.5 px-3.5 py-2 bg-pink-600 hover:bg-pink-500 disabled:opacity-50 text-white rounded-lg text-xs font-semibold shadow-lg shadow-pink-600/30 transition-all shrink-0"
         >
           <RefreshCw className={`w-3.5 h-3.5 ${isAnalyzingVibe ? 'animate-spin' : ''}`} />
-          <span>{isAnalyzingVibe ? 'Analyzing Chat...' : 'Refresh Vibe Analysis'}</span>
+          <span>{isAnalyzingVibe ? t('Analyzing Chat...') : t('Refresh Vibe Analysis')}</span>
         </button>
       </div>
+      {requestError && (
+        <div className="flex items-center gap-2 rounded-lg border border-red-500/30 bg-red-950/30 p-3 text-xs text-red-200" role="alert">
+          <AlertCircle className="h-4 w-4 shrink-0" />
+          <span>{requestError}</span>
+        </div>
+      )}
 
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
         
@@ -177,7 +228,7 @@ export const AiCoPilot: React.FC<AiCoPilotProps> = ({ messages, hotspots }) => {
             <div className="flex items-center justify-between">
               <h3 className="text-xs font-bold text-slate-200 uppercase tracking-wider flex items-center gap-1.5">
                 <Languages className="w-4 h-4 text-pink-400" />
-                <span>Context-Aware Slang Translator</span>
+                <span>{t('Context-Aware Slang Translator')}</span>
               </h3>
               <select
                 value={targetLang}
@@ -195,13 +246,13 @@ export const AiCoPilot: React.FC<AiCoPilotProps> = ({ messages, hotspots }) => {
                 value={slangInput}
                 onChange={(e) => setSlangInput(e.target.value)}
                 rows={2}
-                placeholder="Enter live chat slang (e.g. 草, 2333, てぇてぇ, 蚌埠住了, Pog, KEKW)..."
+                placeholder={t('Enter live chat slang (e.g. 草, 2333, てぇてぇ, 蚌埠住了, Pog, KEKW)...')}
                 className="w-full bg-slate-800/90 border border-slate-700 rounded-lg p-2.5 text-xs text-slate-100 placeholder-slate-500 focus:outline-none focus:border-pink-500 resize-none"
               />
 
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-1 text-[11px] text-slate-400">
-                  <span>Quick samples:</span>
+                  <span>{t('Quick samples:')}</span>
                   {['草', 'てぇてぇ', '蚌埠住了', '急了'].map((sample) => (
                     <button
                       key={sample}
@@ -220,7 +271,7 @@ export const AiCoPilot: React.FC<AiCoPilotProps> = ({ messages, hotspots }) => {
                   className="flex items-center gap-1.5 px-3 py-1.5 bg-pink-600 hover:bg-pink-500 text-white rounded-md text-xs font-semibold shadow-md shadow-pink-600/30 transition-all"
                 >
                   <Sparkles className="w-3 h-3" />
-                  <span>{isTranslating ? 'Translating...' : 'Translate Slang'}</span>
+                  <span>{isTranslating ? t('Translating...') : t('Translate Slang')}</span>
                 </button>
               </div>
             </div>
@@ -233,7 +284,9 @@ export const AiCoPilot: React.FC<AiCoPilotProps> = ({ messages, hotspots }) => {
                     "{translationResult.original}"
                   </span>
                   <span className="px-2 py-0.5 rounded text-[10px] font-bold uppercase bg-pink-500/20 text-pink-300 border border-pink-500/30">
-                    Mood: {translationResult.sentiment}
+                    {translationResult.isAiGenerated
+                      ? `Gemini fallback · ${translationResult.sentiment}`
+                      : 'Google Translate'}
                   </span>
                 </div>
 
@@ -243,7 +296,7 @@ export const AiCoPilot: React.FC<AiCoPilotProps> = ({ messages, hotspots }) => {
 
                 {translationResult.nuance && (
                   <div className="text-xs text-slate-300 bg-slate-900/80 p-2 rounded border border-slate-800 leading-relaxed">
-                    💡 <span className="font-semibold text-slate-200">Cultural Context:</span> {translationResult.nuance}
+                    💡 <span className="font-semibold text-slate-200">{t('Cultural Context:')}</span> {translationResult.nuance}
                   </div>
                 )}
               </div>
@@ -255,30 +308,34 @@ export const AiCoPilot: React.FC<AiCoPilotProps> = ({ messages, hotspots }) => {
             <div className="flex items-center justify-between">
               <h3 className="text-xs font-bold text-slate-200 uppercase tracking-wider flex items-center gap-1.5">
                 <TrendingUp className="w-4 h-4 text-emerald-400" />
-                <span>Live Chat Sentiment & Vibe</span>
+                <span>{t('Live Chat Sentiment & Vibe')}</span>
               </h3>
               <div className="flex items-center gap-1 px-2 py-0.5 rounded bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 text-xs font-mono font-bold">
-                Vibe Score: {streamVibe.vibeScore}/100
+                {streamVibe ? `${t('Vibe Score')}: ${streamVibe.vibeScore}/100` : t('Not analyzed')}
               </div>
             </div>
 
             <p className="text-xs text-slate-300 leading-relaxed bg-slate-800/40 p-2.5 rounded-lg border border-slate-700/60">
-              {streamVibe.summary}
+              {streamVibe?.summary || t('Refresh the analysis to summarize the current chat.')}
             </p>
 
             <div className="space-y-2">
-              <div className="text-xs font-semibold text-slate-300">Suggested Streamer Actions:</div>
-              <ul className="space-y-1.5">
-                {streamVibe.streamerActionItems.map((item, idx) => (
-                  <li
-                    key={idx}
-                    className="flex items-start gap-2 text-xs text-slate-300 bg-slate-800/60 p-2 rounded border border-slate-700/50"
-                  >
-                    <Check className="w-3.5 h-3.5 text-indigo-400 shrink-0 mt-0.5" />
-                    <span>{item}</span>
-                  </li>
-                ))}
-              </ul>
+              <div className="text-xs font-semibold text-slate-300">{t('Suggested Streamer Actions:')}</div>
+              {streamVibe ? (
+                <ul className="space-y-1.5">
+                  {streamVibe.streamerActionItems.map((item, idx) => (
+                    <li
+                      key={idx}
+                      className="flex items-start gap-2 text-xs text-slate-300 bg-slate-800/60 p-2 rounded border border-slate-700/50"
+                    >
+                      <Check className="w-3.5 h-3.5 text-indigo-400 shrink-0 mt-0.5" />
+                      <span>{item}</span>
+                    </li>
+                  ))}
+                </ul>
+              ) : (
+                <p className="text-xs text-slate-500">{t('No AI analysis has been generated yet.')}</p>
+              )}
             </div>
           </div>
         </div>
@@ -292,10 +349,10 @@ export const AiCoPilot: React.FC<AiCoPilotProps> = ({ messages, hotspots }) => {
               <div className="flex items-center gap-2">
                 <HelpCircle className="w-4 h-4 text-amber-400" />
                 <h3 className="text-xs font-bold text-slate-200 uppercase tracking-wider">
-                  Viewer Question Radar
+                  {t('Viewer Question Radar')}
                 </h3>
                 <span className="px-1.5 py-0.2 rounded-full text-[10px] bg-amber-500/20 text-amber-300 border border-amber-500/30 font-mono font-bold">
-                  {viewerQuestions.length} detected
+                  {viewerQuestions.length} {t('detected')}
                 </span>
               </div>
             </div>
@@ -303,7 +360,7 @@ export const AiCoPilot: React.FC<AiCoPilotProps> = ({ messages, hotspots }) => {
             <div className="max-h-60 overflow-y-auto space-y-2 pr-1">
               {viewerQuestions.length === 0 ? (
                 <div className="text-xs text-slate-500 text-center py-6">
-                  No viewer questions detected yet.
+                  {t('No viewer questions detected yet.')}
                 </div>
               ) : (
                 viewerQuestions.map((q) => {
@@ -337,7 +394,7 @@ export const AiCoPilot: React.FC<AiCoPilotProps> = ({ messages, hotspots }) => {
                               : 'bg-amber-500 text-slate-950 font-bold hover:bg-amber-400'
                           }`}
                         >
-                          {isDone ? 'Answered ✓' : 'Mark Answered'}
+                          {isDone ? t('Answered ✓') : t('Mark Answered')}
                         </button>
                       </div>
                       <p className="text-xs text-slate-200 mt-1 leading-snug">{q.text}</p>
@@ -354,25 +411,25 @@ export const AiCoPilot: React.FC<AiCoPilotProps> = ({ messages, hotspots }) => {
               <div className="flex items-center gap-2">
                 <Flame className="w-4 h-4 text-orange-400" />
                 <h3 className="text-xs font-bold text-slate-200 uppercase tracking-wider">
-                  🔥 Stream Hotspots for Clipping
+                  🔥 {t('Stream Hotspots for Clipping')}
                 </h3>
               </div>
               <div className="flex items-center gap-1.5">
                 <button
                   onClick={downloadEdl}
                   className="flex items-center gap-1 px-2 py-1 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded text-[11px] border border-slate-700 transition-colors"
-                  title="Download DaVinci Resolve Timeline Markers (.edl)"
+                  title={t('Download DaVinci Resolve Timeline Markers (.edl)')}
                 >
                   <Film className="w-3 h-3 text-cyan-400" />
-                  <span>EDL Markers</span>
+                  <span>{t('EDL Markers')}</span>
                 </button>
                 <button
                   onClick={downloadTimestamps}
                   className="flex items-center gap-1 px-2 py-1 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded text-[11px] border border-slate-700 transition-colors"
-                  title="Download YouTube Video Chapters (.txt)"
+                  title={t('Download YouTube Video Chapters (.txt)')}
                 >
                   <FileText className="w-3 h-3 text-red-400" />
-                  <span>YT Chapters</span>
+                  <span>{t('YT Chapters')}</span>
                 </button>
               </div>
             </div>
@@ -389,19 +446,19 @@ export const AiCoPilot: React.FC<AiCoPilotProps> = ({ messages, hotspots }) => {
                         {h.timestampStart} - {h.timestampEnd}
                       </span>
                       <span className="px-1.5 py-0.2 rounded text-[10px] font-mono bg-orange-500/20 text-orange-300 border border-orange-500/30">
-                        Peak: {h.peakCpm} CPM
+                        {t('Peak')}: {h.peakCpm} CPM
                       </span>
                     </div>
                     <div className="text-slate-200 font-medium mt-1">
                       {h.description}
                     </div>
                     <div className="text-[10px] text-slate-400 mt-0.5">
-                      Hot words: {h.triggerKeywords.join(', ')}
+                      {t('Hot words')}: {h.triggerKeywords.join(', ')}
                     </div>
                   </div>
 
                   <div className="text-right shrink-0">
-                    <span className="text-[10px] text-slate-400 block">Gifts</span>
+                    <span className="text-[10px] text-slate-400 block">{t('Gifts')}</span>
                     <span className="text-xs font-mono font-bold text-purple-400">
                       +{h.giftTotal} pts
                     </span>

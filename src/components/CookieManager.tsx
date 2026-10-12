@@ -11,12 +11,11 @@ import {
   AlertCircle
 } from 'lucide-react';
 import { PlatformIcon } from './SiteIcons';
+import { useTranslate } from './LanguageContext';
 
 export interface PlatformCookies {
   bilibili: {
-    sessdata: string;
-    bili_jct: string;
-    dedeUserId: string;
+    cookieString: string;
     isLoggedIn: boolean;
     username: string;
     fanLevel: number;
@@ -35,20 +34,70 @@ export interface PlatformCookies {
 
 const STORAGE_KEY = 'danmaku_platform_cookies_v2';
 
-export const CookieManager: React.FC = () => {
+export const readSavedBilibiliCookie = (): string => {
+  if (typeof window === 'undefined') return '';
+  try {
+    const saved = localStorage.getItem(STORAGE_KEY);
+    if (!saved) return '';
+    const parsed = JSON.parse(saved) as {
+      bilibili?: {
+        cookieString?: unknown;
+        sessdata?: unknown;
+        bili_jct?: unknown;
+        dedeUserId?: unknown;
+      };
+    };
+    if (typeof parsed.bilibili?.cookieString === 'string') return parsed.bilibili.cookieString;
+    return [
+      ['SESSDATA', parsed.bilibili?.sessdata],
+      ['bili_jct', parsed.bilibili?.bili_jct],
+      ['DedeUserID', parsed.bilibili?.dedeUserId],
+    ]
+      .filter((entry): entry is [string, string] => typeof entry[1] === 'string' && Boolean(entry[1].trim()))
+      .map(([name, value]) => `${name}=${value.trim()}`)
+      .join('; ');
+  } catch {
+    return '';
+  }
+};
+
+export const readSavedYoutubeCookie = (): string => {
+  if (typeof window === 'undefined') return '';
+  try {
+    const saved = localStorage.getItem(STORAGE_KEY);
+    if (!saved) return '';
+    const parsed = JSON.parse(saved) as { youtube?: { cookieString?: unknown } };
+    return typeof parsed.youtube?.cookieString === 'string' ? parsed.youtube.cookieString : '';
+  } catch {
+    return '';
+  }
+};
+
+interface CookieManagerProps {
+  bilibiliCookie: string;
+  bilibiliLoginStatus?: 'not_configured' | 'pending' | 'verified' | 'invalid';
+  onBilibiliCookieChange: (cookie: string) => void;
+  onYoutubeCookieChange: (cookie: string) => void;
+}
+
+export const CookieManager: React.FC<CookieManagerProps> = ({
+  bilibiliCookie,
+  bilibiliLoginStatus = 'not_configured',
+  onBilibiliCookieChange,
+  onYoutubeCookieChange,
+}) => {
+  const t = useTranslate();
   const [cookies, setCookies] = useState<PlatformCookies>({
     bilibili: {
-      sessdata: '',
-      bili_jct: '',
-      dedeUserId: '',
-      isLoggedIn: true,
-      username: '水色之音_Official',
-      fanLevel: 28,
+      cookieString: bilibiliCookie,
+      isLoggedIn: Boolean(bilibiliCookie),
+      username: bilibiliCookie ? t('B站 Cookie 已保存') : '',
+      fanLevel: 0,
     },
     youtube: {
       cookieString: '',
-      isLoggedIn: true,
-      channelName: 'Ya-chan Ch. 矢野ちゃんねる',
+      isLoggedIn: false,
+      channelName: '',
     },
     missevan: {
       cookieString: '',
@@ -61,9 +110,7 @@ export const CookieManager: React.FC = () => {
   const [savedSuccess, setSavedSuccess] = useState(false);
 
   // Raw inputs for editing
-  const [biliSessdata, setBiliSessdata] = useState('');
-  const [biliJct, setBiliJct] = useState('');
-  const [biliUid, setBiliUid] = useState('');
+  const [biliCookieString, setBiliCookieString] = useState(bilibiliCookie);
   const [ytRawCookie, setYtRawCookie] = useState('');
   const [meRawCookie, setMeRawCookie] = useState('');
 
@@ -73,10 +120,26 @@ export const CookieManager: React.FC = () => {
       if (saved) {
         try {
           const parsed = JSON.parse(saved);
-          setCookies(parsed);
-          setBiliSessdata(parsed.bilibili?.sessdata || '');
-          setBiliJct(parsed.bilibili?.bili_jct || '');
-          setBiliUid(parsed.bilibili?.dedeUserId || '');
+          setCookies((current) => ({
+            ...current,
+            ...parsed,
+            bilibili: {
+              ...current.bilibili,
+              cookieString: bilibiliCookie,
+              isLoggedIn: Boolean(bilibiliCookie),
+              username: bilibiliCookie ? t('B站 Cookie 已保存') : '',
+              fanLevel: 0,
+            },
+            youtube: {
+              ...current.youtube,
+              ...parsed.youtube,
+              cookieString: typeof parsed.youtube?.cookieString === 'string'
+                ? parsed.youtube.cookieString
+                : '',
+              isLoggedIn: typeof parsed.youtube?.cookieString === 'string'
+                && Boolean(parsed.youtube.cookieString.trim()),
+            },
+          }));
           setYtRawCookie(parsed.youtube?.cookieString || '');
           setMeRawCookie(parsed.missevan?.cookieString || '');
         } catch {
@@ -84,31 +147,35 @@ export const CookieManager: React.FC = () => {
         }
       }
     }
-  }, []);
+  }, [bilibiliCookie]);
+
+  useEffect(() => {
+    setBiliCookieString(bilibiliCookie);
+  }, [bilibiliCookie]);
 
   const handleSave = () => {
     const updated: PlatformCookies = {
       bilibili: {
-        sessdata: biliSessdata.trim(),
-        bili_jct: biliJct.trim(),
-        dedeUserId: biliUid.trim(),
-        isLoggedIn: !!biliSessdata.trim(),
-        username: biliSessdata.trim() ? (cookies.bilibili.username || 'B站已授权主播') : '',
-        fanLevel: 28,
+        cookieString: biliCookieString.trim(),
+        isLoggedIn: Boolean(biliCookieString.trim()),
+        username: biliCookieString.trim() ? t('B站 Cookie 已保存') : '',
+        fanLevel: 0,
       },
       youtube: {
         cookieString: ytRawCookie.trim(),
         isLoggedIn: !!ytRawCookie.trim(),
-        channelName: ytRawCookie.trim() ? (cookies.youtube.channelName || 'YouTube已授权频道') : '',
+        channelName: ytRawCookie.trim() ? (cookies.youtube.channelName || t('YouTube已授权频道')) : '',
       },
       missevan: {
         cookieString: meRawCookie.trim(),
         isLoggedIn: !!meRawCookie.trim(),
-        username: meRawCookie.trim() ? '猫耳FM已授权用户' : '',
+        username: meRawCookie.trim() ? t('猫耳FM已授权用户') : '',
       },
     };
 
     setCookies(updated);
+    onBilibiliCookieChange(updated.bilibili.cookieString);
+    onYoutubeCookieChange(updated.youtube.cookieString);
     if (typeof window !== 'undefined') {
       localStorage.setItem(STORAGE_KEY, JSON.stringify(updated));
     }
@@ -120,13 +187,13 @@ export const CookieManager: React.FC = () => {
   const handleClear = (platform: 'bilibili' | 'youtube' | 'missevan') => {
     const updated = { ...cookies };
     if (platform === 'bilibili') {
-      updated.bilibili = { sessdata: '', bili_jct: '', dedeUserId: '', isLoggedIn: false, username: '', fanLevel: 0 };
-      setBiliSessdata('');
-      setBiliJct('');
-      setBiliUid('');
+      updated.bilibili = { cookieString: '', isLoggedIn: false, username: '', fanLevel: 0 };
+      setBiliCookieString('');
+      onBilibiliCookieChange('');
     } else if (platform === 'youtube') {
       updated.youtube = { cookieString: '', isLoggedIn: false, channelName: '' };
       setYtRawCookie('');
+      onYoutubeCookieChange('');
     } else {
       updated.missevan = { cookieString: '', isLoggedIn: false, username: '' };
       setMeRawCookie('');
@@ -148,14 +215,14 @@ export const CookieManager: React.FC = () => {
               <Cookie className="w-4 h-4" />
             </span>
             <h2 className="text-base font-bold text-white">
-              平台 Cookies 凭证管理 (免注册免登录)
+              {t('平台 Cookies 凭证管理 (免注册免登录)')}
             </h2>
             <span className="px-2 py-0.5 rounded text-[10px] font-mono bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 font-bold">
               Local Browser Storage Only
             </span>
           </div>
           <p className="text-xs text-slate-300 mt-1 max-w-2xl leading-relaxed">
-            保留原始仓库的 <strong>Cookies 凭证登录模式</strong>：用户<strong>无需在任何网站或App上注册账号</strong>。凭证仅保存在您当前浏览器的本地缓存中，仅用于主播身份跨平台发送弹幕、使用专属表情包及粉丝牌互动。
+            {t('B站只需粘贴浏览器复制的完整 Cookie，无需拆分填写 SESSDATA、bili_jct 或 DedeUserID。Cookie 保存在本机浏览器，并在连接时发送到本地 Chatsync 服务。')}
           </p>
         </div>
 
@@ -164,7 +231,7 @@ export const CookieManager: React.FC = () => {
           className="flex items-center gap-1.5 px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg text-xs font-bold shadow-lg shadow-emerald-600/30 transition-all shrink-0"
         >
           {savedSuccess ? <Check className="w-4 h-4 text-emerald-200" /> : <Save className="w-4 h-4" />}
-          <span>{savedSuccess ? '凭证已安全保存！' : '保存本地凭证'}</span>
+          <span>{savedSuccess ? t('凭证已安全保存！') : t('保存本地凭证')}</span>
         </button>
       </div>
 
@@ -174,30 +241,50 @@ export const CookieManager: React.FC = () => {
         {/* Left 4 cols: Platform selection */}
         <div className="lg:col-span-4 space-y-2">
           <div className="text-xs font-bold text-slate-300 uppercase tracking-wider mb-2">
-            选择目标推流平台:
+            {t('选择目标推流平台')}
           </div>
 
           {[
             {
               id: 'bilibili' as const,
               name: '哔哩哔哩 (Bilibili)',
-              sub: '用于发送弹幕、粉丝勋章专属表情、大航海舰长表情',
-              status: cookies.bilibili.isLoggedIn ? `已授权: ${cookies.bilibili.username}` : '未配置',
-              isOk: cookies.bilibili.isLoggedIn,
+              sub: t('用于发送弹幕、粉丝勋章专属表情、大航海舰长表情'),
+              status: !cookies.bilibili.isLoggedIn
+                ? t('未配置')
+                : bilibiliLoginStatus === 'verified'
+                  ? t('登录已验证')
+                  : bilibiliLoginStatus === 'invalid'
+                    ? t('Cookie 无效')
+                    : bilibiliLoginStatus === 'pending'
+                      ? t('验证中')
+                      : t('尚未验证'),
+              badge: !cookies.bilibili.isLoggedIn
+                ? t('未登录')
+                : bilibiliLoginStatus === 'verified'
+                  ? t('登录已验证')
+                  : bilibiliLoginStatus === 'invalid'
+                    ? t('Cookie 无效')
+                    : t('已保存'),
+              isOk: bilibiliLoginStatus === 'verified',
+              isInvalid: bilibiliLoginStatus === 'invalid',
             },
             {
               id: 'youtube' as const,
               name: 'YouTube Live',
-              sub: '用于以频道身份发送 Member Stamps 表情与聊天',
-              status: cookies.youtube.isLoggedIn ? `已授权: ${cookies.youtube.channelName}` : '未配置',
+              sub: t('用于以频道身份发送 Member Stamps 表情与聊天'),
+              status: cookies.youtube.isLoggedIn ? t('已保存完整 Cookie') : t('未配置'),
+              badge: cookies.youtube.isLoggedIn ? t('有效') : t('未登录'),
               isOk: cookies.youtube.isLoggedIn,
+              isInvalid: false,
             },
             {
               id: 'missevan' as const,
               name: '猫耳FM (MissEvan)',
-              sub: '用于深夜电台房间聊天互动',
-              status: cookies.missevan.isLoggedIn ? '已配置凭证' : '未配置',
+              sub: t('用于深夜电台房间聊天互动'),
+              status: cookies.missevan.isLoggedIn ? t('已配置凭证') : t('未配置'),
+              badge: cookies.missevan.isLoggedIn ? t('有效') : t('未登录'),
               isOk: cookies.missevan.isLoggedIn,
+              isInvalid: false,
             },
           ].map((item) => (
             <button
@@ -217,12 +304,14 @@ export const CookieManager: React.FC = () => {
                   <div className="font-bold text-xs text-white">{item.name}</div>
                   <span
                     className={`text-[10px] font-mono px-1.5 py-0.2 rounded ${
-                      item.isOk
+                      item.isInvalid
+                        ? 'bg-red-500/20 text-red-300 border border-red-500/30'
+                        : item.isOk
                         ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/30'
                         : 'bg-slate-800 text-slate-500'
                     }`}
                   >
-                    {item.isOk ? '有效' : '未登录'}
+                    {item.badge}
                   </span>
                 </div>
                 <div className="text-[11px] text-slate-400 mt-0.5 truncate">{item.sub}</div>
@@ -240,9 +329,9 @@ export const CookieManager: React.FC = () => {
                 <div className="flex items-center gap-2">
                   <PlatformIcon platform="bilibili" size={20} />
                   <div>
-                    <h3 className="font-bold text-sm text-white">Bilibili 凭证配置</h3>
+                    <h3 className="font-bold text-sm text-white">{t('Bilibili 凭证配置')}</h3>
                     <p className="text-[11px] text-slate-400">
-                      填入 SESSDATA 与 bili_jct 即可激活专属表情与弹幕发言
+                      {t('粘贴完整 Cookie（可选）')}
                     </p>
                   </div>
                 </div>
@@ -253,60 +342,36 @@ export const CookieManager: React.FC = () => {
                     className="flex items-center gap-1 text-xs text-red-400 hover:text-red-300 px-2.5 py-1 rounded bg-red-950/20 border border-red-900/30"
                   >
                     <Trash2 className="w-3.5 h-3.5" />
-                    <span>清除凭证</span>
+                    <span>{t('清除凭证')}</span>
                   </button>
                 )}
               </div>
 
               <div className="space-y-3 text-xs">
                 <div>
-                  <label className="text-slate-300 font-medium block mb-1">
-                    SESSDATA (核心会话密钥)
-                  </label>
+                  <label className="text-slate-300 font-medium block mb-1">{t('Bilibili 完整 Cookie')}</label>
                   <input
                     type="password"
-                    value={biliSessdata}
-                    onChange={(e) => setBiliSessdata(e.target.value)}
-                    placeholder="粘贴 F12 Application > Cookies 中的 SESSDATA 值..."
+                    autoComplete="off"
+                    spellCheck={false}
+                    value={biliCookieString}
+                    onChange={(event) => setBiliCookieString(event.target.value)}
+                    placeholder={t('粘贴完整 Cookie，例如 SESSDATA=...; bili_jct=...; DedeUserID=...')}
                     className="w-full bg-slate-800/90 border border-slate-700 rounded-lg px-3 py-2 text-slate-200 font-mono text-xs focus:outline-none focus:border-indigo-500"
                   />
                 </div>
 
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                  <div>
-                    <label className="text-slate-300 font-medium block mb-1">
-                      bili_jct (CSRF Token)
-                    </label>
-                    <input
-                      type="password"
-                      value={biliJct}
-                      onChange={(e) => setBiliJct(e.target.value)}
-                      placeholder="粘贴 bili_jct 值..."
-                      className="w-full bg-slate-800/90 border border-slate-700 rounded-lg px-3 py-2 text-slate-200 font-mono text-xs focus:outline-none focus:border-indigo-500"
-                    />
-                  </div>
-
-                  <div>
-                    <label className="text-slate-300 font-medium block mb-1">
-                      DedeUserID (B站数字 UID)
-                    </label>
-                    <input
-                      type="text"
-                      value={biliUid}
-                      onChange={(e) => setBiliUid(e.target.value)}
-                      placeholder="例如: 12345678"
-                      className="w-full bg-slate-800/90 border border-slate-700 rounded-lg px-3 py-2 text-slate-200 font-mono text-xs focus:outline-none focus:border-indigo-500"
-                    />
-                  </div>
-                </div>
+                <p className="text-[11px] text-slate-400">
+                  {t('Cookie 通常可从浏览器开发者工具中整段复制；公开弹幕无需登录，Cookie 仅在你选择提供时使用。')}
+                </p>
 
                 <div className="p-3 rounded-lg bg-sky-950/20 border border-sky-800/30 text-[11px] text-sky-300/90 space-y-1">
                   <div className="font-bold flex items-center gap-1 text-sky-300">
                     <ShieldCheck className="w-3.5 h-3.5" />
-                    <span>纯本地存储隐私保护</span>
+                    <span>{t('纯本地存储隐私保护')}</span>
                   </div>
                   <p>
-                    凭证仅保存在您这台设备的浏览器缓存里，绝不上报给任何云端第三方服务器。无需注册本站点账号，关闭即焚或随时清除。
+                    {t('凭证仅保存在您这台设备的浏览器缓存里，不会上传到云端。无需注册本站账号，关闭页面后可随时清除。')}
                   </p>
                 </div>
               </div>
@@ -319,9 +384,9 @@ export const CookieManager: React.FC = () => {
                 <div className="flex items-center gap-2">
                   <PlatformIcon platform="youtube" size={20} />
                   <div>
-                    <h3 className="font-bold text-sm text-white">YouTube 凭证配置</h3>
+                    <h3 className="font-bold text-sm text-white">{t('YouTube 凭证配置')}</h3>
                     <p className="text-[11px] text-slate-400">
-                      填入 YouTube 导出的 Cookie 字符串即可发言或使用专属会员表情
+                      {t('填入 YouTube 导出的 Cookie 字符串即可发言或使用专属会员表情')}
                     </p>
                   </div>
                 </div>
@@ -332,7 +397,7 @@ export const CookieManager: React.FC = () => {
                     className="flex items-center gap-1 text-xs text-red-400 hover:text-red-300 px-2.5 py-1 rounded bg-red-950/20 border border-red-900/30"
                   >
                     <Trash2 className="w-3.5 h-3.5" />
-                    <span>清除凭证</span>
+                    <span>{t('清除凭证')}</span>
                   </button>
                 )}
               </div>
@@ -340,13 +405,13 @@ export const CookieManager: React.FC = () => {
               <div className="space-y-3 text-xs">
                 <div>
                   <label className="text-slate-300 font-medium block mb-1">
-                    YouTube Cookie 字符串 (包含 LOGIN_INFO)
+                    {t('YouTube Cookie 字符串 (包含 LOGIN_INFO)')}
                   </label>
                   <textarea
                     rows={4}
                     value={ytRawCookie}
                     onChange={(e) => setYtRawCookie(e.target.value)}
-                    placeholder="粘贴从浏览器导出或复制的完整 YouTube Cookie 字符串..."
+                    placeholder={t('粘贴从浏览器导出或复制的完整 YouTube Cookie 字符串...')}
                     className="w-full bg-slate-800/90 border border-slate-700 rounded-lg p-3 text-slate-200 font-mono text-xs focus:outline-none focus:border-red-500 resize-none"
                   />
                 </div>
@@ -360,9 +425,9 @@ export const CookieManager: React.FC = () => {
                 <div className="flex items-center gap-2">
                   <PlatformIcon platform="missevan" size={20} />
                   <div>
-                    <h3 className="font-bold text-sm text-white">猫耳FM (MissEvan) 凭证配置</h3>
+                    <h3 className="font-bold text-sm text-white">{t('猫耳FM (MissEvan) 凭证配置')}</h3>
                     <p className="text-[11px] text-slate-400">
-                      填入猫耳 Cookie 字符串即可连接直播间并以账号身份发言
+                      {t('填入猫耳 Cookie 字符串即可连接直播间并以账号身份发言')}
                     </p>
                   </div>
                 </div>
@@ -373,7 +438,7 @@ export const CookieManager: React.FC = () => {
                     className="flex items-center gap-1 text-xs text-red-400 hover:text-red-300 px-2.5 py-1 rounded bg-red-950/20 border border-red-900/30"
                   >
                     <Trash2 className="w-3.5 h-3.5" />
-                    <span>清除凭证</span>
+                    <span>{t('清除凭证')}</span>
                   </button>
                 )}
               </div>
@@ -381,13 +446,13 @@ export const CookieManager: React.FC = () => {
               <div className="space-y-3 text-xs">
                 <div>
                   <label className="text-slate-300 font-medium block mb-1">
-                    猫耳FM (MissEvan) Cookie 字符串
+                    {t('猫耳FM (MissEvan) Cookie 字符串')}
                   </label>
                   <textarea
                     rows={3}
                     value={meRawCookie}
                     onChange={(e) => setMeRawCookie(e.target.value)}
-                    placeholder="粘贴猫耳FM Cookie (可在 missevan.com 网页控制台 F12 > Network 或 Application > Cookies 复制)..."
+                    placeholder={t('粘贴猫耳FM Cookie (可在 missevan.com 网页控制台 F12 > Network 或 Application > Cookies 复制)...')}
                     className="w-full bg-slate-800/90 border border-slate-700 rounded-lg p-3 text-slate-200 font-mono text-xs focus:outline-none focus:border-orange-500 resize-none"
                   />
                 </div>

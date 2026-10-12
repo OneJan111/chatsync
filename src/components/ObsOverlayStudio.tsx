@@ -14,11 +14,12 @@ import {
 } from 'lucide-react';
 import { ChatMessage, SuperChatGift, OverlayConfig, OverlayThemeId, PlatformType } from '../types';
 import { PlatformIcon, BilibiliMedalBadge } from './SiteIcons';
+import { useTranslate } from './LanguageContext';
 
 interface ObsOverlayStudioProps {
   messages: ChatMessage[];
   gifts: SuperChatGift[];
-  onTriggerTestEvent: (type: 'superchat' | 'fleet_guard' | 'chat') => void;
+  onTriggerTestEvent: (type: 'superchat' | 'fleet_guard') => void;
 }
 
 export const ObsOverlayStudio: React.FC<ObsOverlayStudioProps> = ({
@@ -26,6 +27,7 @@ export const ObsOverlayStudio: React.FC<ObsOverlayStudioProps> = ({
   gifts,
   onTriggerTestEvent,
 }) => {
+  const t = useTranslate();
   const [config, setConfig] = useState<OverlayConfig>({
     theme: 'sakura',
     maxMessages: 7,
@@ -80,14 +82,14 @@ export const ObsOverlayStudio: React.FC<ObsOverlayStudioProps> = ({
               <Layers className="w-4 h-4" />
             </span>
             <h2 className="text-base font-bold text-white">
-              OBS Studio Browser Source Designer & Generator
+              {t('OBS Studio Browser Source Designer & Generator')}
             </h2>
             <span className="px-2 py-0.5 rounded text-[10px] font-mono bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">
-              Single-Port Realtime Sync
+              {t('Single-Port Realtime Sync')}
             </span>
           </div>
           <p className="text-xs text-slate-400 mt-1 max-w-2xl">
-            In the original <span className="text-slate-300 font-mono">OneJan111/multi-platform-chat</span>, OBS required a fragile second server on port 8502 which blocked cloud deployment. In v2.0, the overlay runs directly with zero lag, instant CSS theming, and full OBS Browser Source transparency.
+            {t('In the original OBS version, a second server on port 8502 blocked cloud deployment. In v2.0, the overlay runs directly with instant CSS theming and OBS Browser Source transparency.')}
           </p>
         </div>
 
@@ -98,7 +100,7 @@ export const ObsOverlayStudio: React.FC<ObsOverlayStudioProps> = ({
             className="flex-1 md:flex-none flex items-center justify-center gap-2 px-4 py-2 bg-purple-600 hover:bg-purple-500 text-white rounded-lg text-xs font-semibold shadow-lg shadow-purple-600/30 transition-all"
           >
             {copied ? <Check className="w-4 h-4 text-emerald-300" /> : <Copy className="w-4 h-4" />}
-            <span>{copied ? 'URL Copied!' : 'Copy OBS Browser Source URL'}</span>
+            <span>{copied ? t('URL Copied!') : t('Copy OBS Browser Source URL')}</span>
           </button>
 
           <a
@@ -106,7 +108,7 @@ export const ObsOverlayStudio: React.FC<ObsOverlayStudioProps> = ({
             target="_blank"
             rel="noopener noreferrer"
             className="p-2 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-lg border border-slate-700 transition-colors"
-            title="Open standalone overlay in popout window"
+            title={t('Open standalone overlay in popout window')}
           >
             <ExternalLink className="w-4 h-4" />
           </a>
@@ -120,14 +122,14 @@ export const ObsOverlayStudio: React.FC<ObsOverlayStudioProps> = ({
           <div>
             <label className="text-xs font-semibold text-slate-300 flex items-center gap-1.5 mb-2">
               <Palette className="w-3.5 h-3.5 text-indigo-400" />
-              <span>Select Overlay Theme Preset</span>
+              <span>{t('Select Overlay Theme Preset')}</span>
             </label>
             <div className="grid grid-cols-2 gap-2">
               {[
-                { id: 'sakura', name: '🌸 Sakura Anime Glass', desc: 'Frosted blur & pastel vibes' },
-                { id: 'cyberpunk', name: '⚡ Cyberpunk Neon', desc: 'High contrast cyan/magenta' },
-                { id: 'minimal', name: '🖤 Streamer Minimal Dark', desc: 'Clean esports broadcast style' },
-                { id: 'arcade', name: '👾 Retro Pixel Arcade', desc: '8-bit retro arcade aesthetic' },
+                { id: 'sakura', name: t('🌸 Sakura Anime Glass'), desc: t('Frosted blur & pastel vibes') },
+                { id: 'cyberpunk', name: t('⚡ Cyberpunk Neon'), desc: t('High contrast cyan/magenta') },
+                { id: 'minimal', name: t('🖤 Streamer Minimal Dark'), desc: t('Clean esports broadcast style') },
+                { id: 'arcade', name: t('👾 Retro Pixel Arcade'), desc: t('8-bit retro arcade aesthetic') },
               ].map((theme) => (
                 <button
                   key={theme.id}
@@ -149,14 +151,14 @@ export const ObsOverlayStudio: React.FC<ObsOverlayStudioProps> = ({
           <div className="space-y-3 pt-3 border-t border-slate-800">
             <h3 className="text-xs font-semibold text-slate-300 flex items-center gap-1.5">
               <Sliders className="w-3.5 h-3.5 text-cyan-400" />
-              <span>Display & Pinning Options</span>
+              <span>{t('Display & Pinning Options')}</span>
             </h3>
 
             {/* Max Regular Messages */}
             <div className="space-y-1">
               <div className="flex justify-between text-xs text-slate-400">
-                <span>Chat Messages shown:</span>
-                <span className="font-mono text-white font-bold">{config.maxMessages} msgs</span>
+                <span>{t('Chat Messages shown:')}</span>
+                <span className="font-mono text-white font-bold">{config.maxMessages} {t('msgs')}</span>
               </div>
               <input
                 type="range"
@@ -171,8 +173,8 @@ export const ObsOverlayStudio: React.FC<ObsOverlayStudioProps> = ({
             {/* Max Super Chats Pinned */}
             <div className="space-y-1">
               <div className="flex justify-between text-xs text-slate-400">
-                <span>Pinned Super Chats & Gifts:</span>
-                <span className="font-mono text-white font-bold">{config.maxSuperChats} pinned</span>
+                <span>{t('Pinned Super Chats & Gifts:')}</span>
+                <span className="font-mono text-white font-bold">{config.maxSuperChats} {t('pinned')}</span>
               </div>
               <input
                 type="range"
@@ -187,7 +189,7 @@ export const ObsOverlayStudio: React.FC<ObsOverlayStudioProps> = ({
             {/* Font scale */}
             <div className="space-y-1">
               <div className="flex justify-between text-xs text-slate-400">
-                <span>Overlay Font Size:</span>
+                <span>{t('Overlay Font Size:')}</span>
                 <span className="font-mono text-white font-bold">{Math.round(config.fontSize * 100)}%</span>
               </div>
               <input
@@ -204,7 +206,7 @@ export const ObsOverlayStudio: React.FC<ObsOverlayStudioProps> = ({
             {/* Background Opacity */}
             <div className="space-y-1">
               <div className="flex justify-between text-xs text-slate-400">
-                <span>Background Opacity:</span>
+                <span>{t('Background Opacity:')}</span>
                 <span className="font-mono text-white font-bold">{Math.round(config.backgroundOpacity * 100)}%</span>
               </div>
               <input
@@ -228,7 +230,7 @@ export const ObsOverlayStudio: React.FC<ObsOverlayStudioProps> = ({
                 onChange={(e) => setConfig((prev) => ({ ...prev, showUsernames: e.target.checked }))}
                 className="rounded accent-indigo-500"
               />
-              <span>Show Usernames</span>
+              <span>{t('Show Usernames')}</span>
             </label>
 
             <label className="flex items-center gap-2 text-slate-300 cursor-pointer">
@@ -238,14 +240,14 @@ export const ObsOverlayStudio: React.FC<ObsOverlayStudioProps> = ({
                 onChange={(e) => setConfig((prev) => ({ ...prev, showReadingAids: e.target.checked }))}
                 className="rounded accent-indigo-500"
               />
-              <span>Ruby Pinyin/Furigana</span>
+              <span>{t('Ruby Pinyin/Furigana')}</span>
             </label>
           </div>
 
           {/* Custom Streamer Notice */}
           <div className="pt-2 border-t border-slate-800 space-y-1.5">
             <label className="text-xs font-semibold text-slate-300 flex items-center justify-between">
-              <span>Streamer Announcement Banner</span>
+              <span>{t('Streamer Announcement Banner')}</span>
               <input
                 type="checkbox"
                 checked={config.showCustomNotice}
@@ -259,15 +261,15 @@ export const ObsOverlayStudio: React.FC<ObsOverlayStudioProps> = ({
                 value={config.customNoticeText}
                 onChange={(e) => setConfig((prev) => ({ ...prev, customNoticeText: e.target.value }))}
                 className="w-full bg-slate-800 border border-slate-700 rounded px-2.5 py-1.5 text-xs text-slate-200"
-                placeholder="Notice text displayed on overlay..."
+                placeholder={t('Notice text displayed on overlay...')}
               />
             )}
           </div>
 
           {/* Test Events Trigger */}
           <div className="pt-3 border-t border-slate-800 space-y-2">
-            <div className="text-xs font-semibold text-slate-300">Live Simulator Test Buttons:</div>
-            <div className="grid grid-cols-3 gap-1.5 text-xs">
+            <div className="text-xs font-semibold text-slate-300">{t('Gift Preview Test Buttons:')}</div>
+            <div className="grid grid-cols-2 gap-1.5 text-xs">
               <button
                 onClick={() => onTriggerTestEvent('superchat')}
                 className="px-2 py-1.5 bg-red-600/20 hover:bg-red-600/30 text-red-300 border border-red-500/30 rounded font-medium text-[11px]"
@@ -278,13 +280,7 @@ export const ObsOverlayStudio: React.FC<ObsOverlayStudioProps> = ({
                 onClick={() => onTriggerTestEvent('fleet_guard')}
                 className="px-2 py-1.5 bg-sky-600/20 hover:bg-sky-600/30 text-sky-300 border border-sky-500/30 rounded font-medium text-[11px]"
               >
-                + Bili 舰长 Guard
-              </button>
-              <button
-                onClick={() => onTriggerTestEvent('chat')}
-                className="px-2 py-1.5 bg-indigo-600/20 hover:bg-indigo-600/30 text-indigo-300 border border-indigo-500/30 rounded font-medium text-[11px]"
-              >
-                + Rapid Danmaku
+                + {t('Bili Captain Guard')}
               </button>
             </div>
           </div>
@@ -296,7 +292,7 @@ export const ObsOverlayStudio: React.FC<ObsOverlayStudioProps> = ({
           <div className="flex items-center justify-between text-xs text-slate-400">
             <span className="flex items-center gap-1 font-medium text-slate-300">
               <Tv className="w-3.5 h-3.5 text-purple-400" />
-              <span>OBS Preview Canvas (Simulated Stream Background)</span>
+              <span>{t('OBS Preview Canvas (Simulated Stream Background)')}</span>
             </span>
 
             <div className="flex items-center gap-1 bg-slate-900 border border-slate-800 rounded p-0.5 text-[11px]">
@@ -308,7 +304,7 @@ export const ObsOverlayStudio: React.FC<ObsOverlayStudioProps> = ({
                     previewBg === bg ? 'bg-indigo-600 text-white font-medium' : 'hover:text-slate-200'
                   }`}
                 >
-                  {bg === 'checker' ? 'Transparent' : bg}
+                  {bg === 'checker' ? t('Transparent') : t(bg)}
                 </button>
               ))}
             </div>
