@@ -1,0 +1,6 @@
+{
+  "name": "Multi-Platform Chat Pro & Architecture Studio",
+  "description": "Next-generation multi-platform live chat hub (YouTube, Bilibili, MissEvan, Twitch, Kick) with OBS overlay studio, AI slang translation, TTS speech queue, and repository improvement blueprint for OneJan111/multi-platform-chat.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
